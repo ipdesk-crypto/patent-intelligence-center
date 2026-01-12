@@ -6,23 +6,22 @@ from datetime import datetime
 
 # --- 1. CONFIGURATION & BRANDING ---
 BRAND_ORANGE = "#FF8C00"
-# Ensure this matches your file name on GitHub exactly
+# Hardcoded data file reference as requested
 DATA_FILE = "Data Structure - Patents in UAE (Archistrategos) - Type 5.csv"
 
 st.set_page_config(page_title="Archistrategos Intelligence Portal", layout="wide", page_icon="⚖️")
 
-# Custom CSS for Archistrategos Branding
+# Custom CSS for Archistrategos Branding & Layout
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #0E1117; color: #FFFFFF; font-family: 'Inter', sans-serif; }}
     [data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 2px solid {BRAND_ORANGE}; }}
-    h1, h2, h3 {{ color: {BRAND_ORANGE} !important; font-weight: 800; }}
-    .metric-badge {{
+    h1, h2, h3, h4 {{ color: {BRAND_ORANGE} !important; font-weight: 800; }}
+    .metric-card {{
         background: #161b22;
-        color: {BRAND_ORANGE} !important;
-        padding: 15px;
-        border-radius: 8px;
-        border: 1px solid {BRAND_ORANGE};
+        padding: 20px;
+        border-radius: 10px;
+        border-left: 5px solid {BRAND_ORANGE};
         text-align: center;
         margin-bottom: 20px;
     }}
@@ -31,6 +30,11 @@ st.markdown(f"""
         color: #000000 !important;
         font-weight: 700 !important;
         width: 100%;
+        border-radius: 5px;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background-color: {BRAND_ORANGE} !important;
+        color: black !important;
     }}
     </style>
     """, unsafe_allow_html=True)
@@ -48,7 +52,6 @@ def check_password():
         st.markdown("<h2 style='text-align: center;'>SECURITY GATEWAY</h2>", unsafe_allow_html=True)
         
         with st.form("login_gateway"):
-            # HARDCODED PASSWORD
             pwd = st.text_input("Enter Passcode", type="password")
             if st.form_submit_button("AUTHENTICATE SYSTEM"):
                 if pwd == "Archistrategos2024": 
@@ -61,7 +64,7 @@ def check_password():
 if not check_password():
     st.stop()
 
-# --- 3. DATA ENGINE ---
+# --- 3. DATA ENGINE (Pre-ingestion) ---
 @st.cache_data
 def load_and_prep_data(file_path):
     if not os.path.exists(file_path):
@@ -70,7 +73,7 @@ def load_and_prep_data(file_path):
         df = pd.read_csv(file_path)
         df.columns = [c.strip() for c in df.columns]
         
-        # Mapping Dates 
+        # Convert date columns to datetime objects for analysis 
         date_cols = ['Application Date', 'Priority Date', 'Earliest Priority Date']
         for col in date_cols:
             if col in df.columns:
@@ -80,22 +83,22 @@ def load_and_prep_data(file_path):
             df['Filing Year'] = df['Application Date'].dt.year
         return df
     except Exception as e:
-        st.error(f"Error loading data: {e}")
+        st.error(f"Error loading system data: {e}")
         return None
 
-# --- 4. NAVIGATION & SIDEBAR ---
+# --- 4. NAVIGATION & SHARED SIDEBAR ---
 with st.sidebar:
     if os.path.exists("logo.jpeg"):
         st.image("logo.jpeg", use_container_width=True)
     st.markdown("---")
     nav = st.radio("COMMAND NAVIGATION", ["Search Engine", "Analysis Engine"])
     
-    if st.button("🔄 Clear Filters"):
+    if st.button("🔄 Reset Portal View"):
         for key in st.session_state.keys():
             if key.startswith('search_'): st.session_state[key] = ""
         st.rerun()
 
-# Load Data Automatically
+# Load Data Automatically for all users
 master_df = load_and_prep_data(DATA_FILE)
 
 if master_df is not None:
@@ -103,80 +106,112 @@ if master_df is not None:
     if nav == "Search Engine":
         st.title("🔍 Patent Query Engine")
         st.markdown("### Search Parameters")
+        
         c1, c2, c3 = st.columns(3)
         with c1:
-            q_app_num = st.text_input("Application Number", key="search_1") # 
-            q_title = st.text_input("Title", key="search_2") # 
-            q_abstract = st.text_input("Abstract", key="search_3") # 
-            q_date = st.text_input("Application Date (YYYY-MM-DD)", key="search_4") # 
+            q_app_num = st.text_input("Application Number", key="search_1")
+            q_title = st.text_input("Title", key="search_2")
+            q_abstract = st.text_input("Abstract", key="search_3")
         with c2:
-            q_class = st.text_input("Classification", key="search_5") # 
-            q_country = st.text_input("Country Name (Priority)", key="search_6") # 
-            q_prio_num = st.text_input("Priority Number", key="search_7") # 
+            q_class = st.text_input("Classification (IPC)", key="search_5")
+            q_country = st.text_input("Country (Priority)", key="search_6")
+            q_prio_num = st.text_input("Priority Number", key="search_7")
         with c3:
-            q_prio_date = st.text_input("Priority Date (YYYY-MM-DD)", key="search_8") # 
-            q_early_date = st.text_input("Earliest Priority Date", key="search_9") # 
-            q_type = st.text_input("Application Type (ID)", key="search_10") # 
+            q_date = st.text_input("Application Date (YYYY-MM-DD)", key="search_4")
+            q_type = st.text_input("App Type (ID)", key="search_10")
 
+        # Dynamic Filter Logic 
         f = master_df.copy()
-        # Filter Logic based on your CSV Headers 
         if q_app_num: f = f[f['Application Number'].astype(str).str.contains(q_app_num, case=False, na=False)]
         if q_title: f = f[f['Title'].astype(str).str.contains(q_title, case=False, na=False)]
         if q_abstract: f = f[f['Abstract'].astype(str).str.contains(q_abstract, case=False, na=False)]
         if q_date: f = f[f['Application Date'].astype(str).str.contains(q_date, na=False)]
         if q_class: f = f[f['Classification'].astype(str).str.contains(q_class, case=False, na=False)]
         if q_country: f = f[f['Country Name (Priority)'].astype(str).str.contains(q_country, case=False, na=False)]
-        if q_prio_num: f = f[f['Priority Number'].astype(str).str.contains(q_prio_num, na=False)]
-        if q_prio_date: f = f[f['Priority Date'].astype(str).str.contains(q_prio_date, na=False)]
-        if q_early_date: f = f[f['Earliest Priority Date'].astype(str).str.contains(q_early_date, na=False)]
         if q_type: f = f[f['Application Type (ID)'].astype(str).str.contains(q_type, na=False)]
 
         st.session_state['filtered_df'] = f
-        st.markdown(f'<div class="metric-badge">RESULTS IDENTIFIED: {len(f)}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><h4>ACTIVE RESULTS IN SYSTEM: {len(f)}</h4></div>', unsafe_allow_html=True)
         st.dataframe(f, use_container_width=True, hide_index=True)
 
     # --- 6. ANALYSIS ENGINE ---
     elif nav == "Analysis Engine":
         st.title("📈 Strategic Analysis Engine")
-        df_ana = st.session_state.get('filtered_df', master_df)
         
-        # High-Level Metrics
-        m1, m2, m3 = st.columns(3)
-        m1.metric("Total Records", len(df_ana))
-        m2.metric("Top IPC Group", df_ana['Classification'].mode()[0] if 'Classification' in df_ana.columns else "N/A")
-        m3.metric("Primary Region", df_ana['Country Name (Priority)'].mode()[0] if 'Country Name (Priority)' in df_ana.columns else "N/A")
+        # Determine base data (results from Search Engine OR complete dataset)
+        base_data = st.session_state.get('filtered_df', master_df)
+        
+        # --- ANALYSIS CONTROL SIDEBAR (Filter the Analysis) ---
+        with st.sidebar:
+            st.markdown("### Visual Toggles")
+            show_kpis = st.checkbox("Executive Summary Metrics", value=True)
+            show_growth = st.checkbox("Technology Growth Trends", value=True)
+            show_geo = st.checkbox("Geographic Landscape", value=True)
+            show_composition = st.checkbox("Portfolio Distribution", value=True)
+            
+            st.markdown("---")
+            st.markdown("### Analysis Deep Dive")
+            
+            # Interactive filters that only affect the Analysis tab
+            all_juris = sorted(base_data['Country Name (Priority)'].dropna().unique())
+            sel_juris = st.multiselect("Filter Analysis by Country", all_juris)
+            
+            all_years = sorted(base_data['Filing Year'].dropna().unique().astype(int))
+            sel_years = st.slider("Filter Analysis by Year Range", min(all_years), max(all_years), (min(all_years), max(all_years)))
 
-        # IPC Growth Analysis
-        if 'Classification' in df_ana.columns and 'Filing Year' in df_ana.columns:
-            st.subheader("Technology Growth Over Time (IPC)")
-            df_ana['IPC_Main'] = df_ana['Classification'].str.split().str[0].str.replace(',', '')
+        # Apply Deep-Dive Filters to Analysis
+        df_ana = base_data.copy()
+        if sel_juris:
+            df_ana = df_ana[df_ana['Country Name (Priority)'].isin(sel_juris)]
+        df_ana = df_ana[(df_ana['Filing Year'] >= sel_years[0]) & (df_ana['Filing Year'] <= sel_years[1])]
+
+        # MODULE 1: EXECUTIVE METRICS
+        if show_kpis:
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Total Records", len(df_ana))
+            m2.metric("Unique IPCs", df_ana['Classification'].nunique() if 'Classification' in df_ana.columns else 0)
+            m3.metric("Primary Region", df_ana['Country Name (Priority)'].mode()[0] if not df_ana.empty else "N/A")
+            m4.metric("Active Year Span", f"{int(df_ana['Filing Year'].min())}-{int(df_ana['Filing Year'].max())}" if not df_ana.empty else "N/A")
+            st.markdown("---")
+
+        # MODULE 2: TECHNOLOGY GROWTH (IPC)
+        if show_growth and 'Classification' in df_ana.columns:
+            st.subheader("Technology Sector Growth Over Time")
+            # Cleaning IPC for accurate grouping 
+            df_ana['IPC_Main'] = df_ana['Classification'].str.split().str[0].str.replace(',', '').str.strip()
             growth = df_ana.groupby(['Filing Year', 'IPC_Main']).size().reset_index(name='Volume')
             
             fig_growth = px.line(growth, x='Filing Year', y='Volume', color='IPC_Main',
-                               markers=True, template="plotly_dark", 
+                               markers=True, line_shape="spline", template="plotly_dark",
                                color_discrete_sequence=px.colors.qualitative.Prism)
-            fig_growth.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+            fig_growth.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                                   xaxis=dict(showgrid=False), yaxis=dict(gridcolor='#333333'))
             st.plotly_chart(fig_growth, use_container_width=True)
 
         st.markdown("---")
-        c_left, c_right = st.columns(2)
+        col_left, col_right = st.columns(2)
         
-        with c_left:
-            st.markdown("#### Top Jurisdictions")
-            geo = df_ana['Country Name (Priority)'].value_counts().head(10).reset_index()
-            geo.columns = ['Country', 'Count']
-            fig_bar = px.bar(geo, x='Country', y='Count', template="plotly_dark", color_discrete_sequence=[BRAND_ORANGE])
-            fig_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_bar, use_container_width=True)
+        # MODULE 3: GEOGRAPHIC LANDSCAPE
+        with col_left:
+            if show_geo:
+                st.markdown("#### Geographic Landscape (Top 10)")
+                geo = df_ana['Country Name (Priority)'].value_counts().head(10).reset_index()
+                geo.columns = ['Country', 'Count']
+                fig_bar = px.bar(geo, x='Country', y='Count', template="plotly_dark",
+                                color_discrete_sequence=[BRAND_ORANGE])
+                fig_bar.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_bar, use_container_width=True)
             
-        with c_right:
-            st.markdown("#### Portfolio Type Distribution")
-            types = df_ana['Application Type (ID)'].value_counts().reset_index()
-            types.columns = ['Type', 'Count']
-            # Replaced st.pie_chart with Plotly to avoid AttributeError
-            fig_pie = px.pie(types, values='Count', names='Type', hole=0.4, template="plotly_dark",
-                            color_discrete_sequence=px.colors.sequential.Oranges_r)
-            fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
-            st.plotly_chart(fig_pie, use_container_width=True)
+        # MODULE 4: PORTFOLIO COMPOSITION (Donut Chart)
+        with col_right:
+            if show_composition:
+                st.markdown("#### Portfolio Composition")
+                types = df_ana['Application Type (ID)'].value_counts().reset_index()
+                types.columns = ['Type', 'Volume']
+                fig_pie = px.pie(types, values='Volume', names='Type', hole=0.5,
+                                template="plotly_dark", 
+                                color_discrete_sequence=px.colors.sequential.Oranges_r)
+                fig_pie.update_layout(plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)')
+                st.plotly_chart(fig_pie, use_container_width=True)
 else:
-    st.error(f"Critical System File Missing: Please ensure '{DATA_FILE}' is in the GitHub repository.")
+    st.error(f"Critical Error: System data file '{DATA_FILE}' not found. Please upload to the repository.")
