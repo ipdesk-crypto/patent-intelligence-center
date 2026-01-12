@@ -10,21 +10,27 @@ DATA_FILE = "Data Structure - Patents in UAE (Archistrategos) - Type 5.csv"
 
 st.set_page_config(page_title="Archistrategos Intelligence Portal", layout="wide")
 
-# Custom CSS for the Archistrategos Brand Identity
+# Custom UI Styling
 st.markdown(f"""
     <style>
     .stApp {{ background-color: #0E1117; color: #FFFFFF; }}
     [data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 2px solid {BRAND_ORANGE}; }}
     h1, h2, h3, h4 {{ color: {BRAND_ORANGE} !important; font-weight: 800; }}
     .stMetric {{ background-color: #161b22; padding: 15px; border-radius: 10px; border: 1px solid #333; }}
-    .stDataFrame {{ border: 1px solid {BRAND_ORANGE}; border-radius: 5px; }}
+    .stDataFrame {{ border: 1px solid #333; border-radius: 5px; }}
+    /* Custom Dossier Card Styling */
+    .dossier-card {{
+        border: 1px solid {BRAND_ORANGE};
+        padding: 25px;
+        border-radius: 12px;
+        background-color: #161b22;
+        margin-bottom: 20px;
+    }}
     </style>
     """, unsafe_allow_html=True)
 
 # --- 2. AUTHENTICATION ---
-if "auth" not in st.session_state: 
-    st.session_state.auth = False
-
+if "auth" not in st.session_state: st.session_state.auth = False
 if not st.session_state.auth:
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
@@ -34,167 +40,157 @@ if not st.session_state.auth:
             if pwd == "Archistrategos2024":
                 st.session_state.auth = True
                 st.rerun()
-            else:
-                st.error("Access Denied.")
     st.stop()
 
 # --- 3. DATA ENGINE ---
 @st.cache_data
 def load_data():
-    if not os.path.exists(DATA_FILE): 
-        return None
-    try:
-        df = pd.read_csv(DATA_FILE)
-        df.columns = [c.strip() for c in df.columns]
-        # Date processing
-        df['Application Date'] = pd.to_datetime(df['Application Date'], errors='coerce')
-        df['Year'] = df['Application Date'].dt.year
-        # Extract IPC Group (First part of the classification)
-        df['IPC_Group'] = df['Classification'].astype(str).str.split().str[0].str.replace(',', '').str.strip()
-        return df
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
-        return None
+    if not os.path.exists(DATA_FILE): return None
+    df = pd.read_csv(DATA_FILE)
+    df.columns = [c.strip() for c in df.columns]
+    
+    # FIX: Convert to datetime then extract ONLY the date to remove 00:00:00 timestamp
+    df['Application Date'] = pd.to_datetime(df['Application Date'], errors='coerce').dt.date
+    
+    # Create helper columns for analysis
+    df['Year'] = pd.to_datetime(df['Application Date']).dt.year
+    df['IPC_Group'] = df['Classification'].astype(str).str.split().str[0].str.replace(',', '').str.strip()
+    return df
 
 master_df = load_data()
 
 # --- 4. NAVIGATION ---
 with st.sidebar:
-    st.image("https://via.placeholder.com/150x50.png?text=ARCHISTRATEGOS", use_container_width=True) # Replace with real logo
+    st.markdown(f"## ARCHISTRATEGOS")
     nav = st.radio("SELECT MODE", ["Search Engine", "Strategic Analysis"])
     st.markdown("---")
-    st.markdown("© 2026 Archistrategos Intelligence")
+    if st.button("Logout"):
+        st.session_state.auth = False
+        st.rerun()
 
 if master_df is not None:
-    
-# --- 5. SEARCH ENGINE (Search + Dossier View) ---
+    # --- 5. SEARCH ENGINE & GOOGLE-STYLE DOSSIER ---
     if nav == "Search Engine":
-        st.title("🔍 Patent Search & Intelligence")
+        st.title("🔍 Patent Intelligence Engine")
         
-        # Search Controls
-        global_q = st.text_input("Global Search", placeholder="Type keywords (e.g., 'Solar', 'IBM')...")
+        # Keyword and Filters
+        global_q = st.text_input("Global Search", placeholder="Search by Applicant, Technology, or ID...")
         
-        with st.expander("Advanced Filter Controls", expanded=False):
+        with st.expander("Advanced Filters"):
             c1, c2, c3 = st.columns(3)
-            with c1: f_app = st.text_input("Application Number")
-            with c2: f_country = st.text_input("Source Country")
-            with c3: f_year = st.text_input("Specific Year")
-        
+            with c1: f_country = st.text_input("Source Country")
+            with c2: f_ipc = st.text_input("IPC Code")
+            with c3: f_year = st.text_input("Filing Year")
+
         # Filtering Logic
         df_search = master_df.copy()
         if global_q:
             mask = df_search.apply(lambda row: row.astype(str).str.contains(global_q, case=False).any(), axis=1)
             df_search = df_search[mask]
-        if f_app: df_search = df_search[df_search['Application Number'].astype(str).str.contains(f_app, case=False, na=False)]
-        if f_country: df_search = df_search[df_search['Country Name (Priority)'].astype(str).str.contains(f_country, case=False, na=False)]
-        if f_year: df_search = df_search[df_search['Year'].astype(str).str.contains(f_year, na=False)]
+        if f_country: df_search = df_search[df_search['Country Name (Priority)'].str.contains(f_country, case=False, na=False)]
+        if f_ipc: df_search = df_search[df_search['Classification'].str.contains(f_ipc, case=False, na=False)]
+        if f_year: df_search = df_search[df_search['Year'].astype(str).contains(f_year, na=False)]
 
-        # --- DOSSIER SELECTION ---
         if not df_search.empty:
             st.markdown("---")
-            # Selectbox to pick a specific patent to inspect
-            patent_options = df_search['Application Number'].tolist()
-            selected_app = st.selectbox("Select a Patent to view full Intelligence Dossier", patent_options)
-            
-            # Pull data for the specific dossier
-            dossier_data = df_search[df_search['Application Number'] == selected_app].iloc[0]
+            # Selectbox to generate the dossier for a specific record
+            selected_id = st.selectbox("Select a Record to Open Intelligence Dossier", df_search['Application Number'].unique())
+            patent = df_search[df_search['Application Number'] == selected_id].iloc[0]
 
-            # --- DOSSIER LAYOUT ---
-            with st.container():
-                st.markdown(f"### 📄 DOSSIER: {selected_app}")
-                
-                # Column Layout for "Google Patent" style look
-                col_left, col_right = st.columns([2, 1])
-
-                with col_left:
-                    st.markdown(f"#### **Classification:** {dossier_data.get('Classification', 'N/A')}")
-                    st.info(f"**Description Summary:** This application was filed in the jurisdiction of **{dossier_data.get('Country Name (Priority)', 'Unknown')}**.")
-                    
-                    # Detailed Metadata Table
-                    details = {
-                        "Field": ["Application Date", "IPC Group", "Applicant Type", "Legal Status"],
-                        "Value": [
-                            dossier_data.get('Application Date', 'N/A'),
-                            dossier_data.get('IPC_Group', 'N/A'),
-                            dossier_data.get('Application Type (ID)', 'N/A'),
-                            "Active / Pending" # You can map this to a status column if available
-                        ]
-                    }
-                    st.table(pd.DataFrame(details))
-
-                with col_right:
-                    # Sidebar info card
-                    st.markdown(f"""
-                    <div style="border: 1px solid {BRAND_ORANGE}; padding: 20px; border-radius: 10px; background-color: #161b22;">
-                        <p style="color:{BRAND_ORANGE}; margin-bottom: 5px;">FILING YEAR</p>
-                        <h2 style="margin-top: 0px;">{int(dossier_data.get('Year', 0))}</h2>
-                        <hr>
-                        <p style="color:{BRAND_ORANGE}; margin-bottom: 5px;">PRIORITY COUNTRY</p>
-                        <h3 style="margin-top: 0px;">{dossier_data.get('Country Name (Priority)', 'N/A')}</h3>
+            # Dossier Layout (Neat & Tidy like Google Patents)
+            st.markdown(f"""
+                <div class="dossier-card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div>
+                            <h4 style="margin:0; color:{BRAND_ORANGE}; letter-spacing: 2px;">INTELLECTUAL PROPERTY DOSSIER</h4>
+                            <h2 style="margin:0; font-size: 32px;">{patent['Application Number']}</h2>
+                            <p style="color:#888; font-size: 18px;">{patent['Classification']}</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <span style="background:{BRAND_ORANGE}; color:black; padding:8px 20px; border-radius:50px; font-weight:bold; font-size: 14px;">
+                                {patent['Year']} FILING
+                            </span>
+                        </div>
                     </div>
-                    """, unsafe_allow_html=True)
-            
-            st.markdown("---")
-            st.markdown("#### Full Search Results Data")
-            st.dataframe(df_search, use_container_width=True, hide_index=True)
-        else:
-            st.warning("No records found matching your criteria.")
+                    <hr style="border-color:#333; margin: 20px 0;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px;">
+                        <div>
+                            <p style="color:#888; margin:0; font-size: 12px;">APPLICATION DATE</p>
+                            <p style="font-size:18px; margin:0;"><b>{patent['Application Date']}</b></p>
+                        </div>
+                        <div>
+                            <p style="color:#888; margin:0; font-size: 12px;">PRIORITY COUNTRY</p>
+                            <p style="font-size:18px; margin:0;"><b>{patent['Country Name (Priority)']}</b></p>
+                        </div>
+                        <div>
+                            <p style="color:#888; margin:0; font-size: 12px;">IPC PRIMARY GROUP</p>
+                            <p style="font-size:18px; margin:0;"><b>{patent['IPC_Group']}</b></p>
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
 
-    # --- 6. STRATEGIC ANALYSIS (Visualization) ---
+            # Raw Data Table
+            with st.expander("View Full Data Results Table", expanded=True):
+                st.dataframe(df_search, use_container_width=True, hide_index=True)
+        else:
+            st.info("No matching patents found.")
+
+    # --- 6. STRATEGIC ANALYSIS (Multiple Dynamic Plots) ---
     else:
-        st.title("📈 Strategic Intelligence Dashboard")
+        st.title("📈 Strategic Analysis Dashboard")
         
-        # Analysis Sidebar Filters
         with st.sidebar:
+            st.markdown("### Dashboard Controls")
             all_ipcs = sorted(master_df['IPC_Group'].unique().astype(str))
-            sel_ipcs = st.multiselect("Filter by IPC Classes", [x for x in all_ipcs if x not in ['nan', 'None']])
+            sel_ipcs = st.multiselect("Filter Analysis by IPC Class", [x for x in all_ipcs if x not in ['nan', 'None']])
             
             all_years = sorted(master_df['Year'].dropna().unique().astype(int))
             sel_years = st.slider("Timeline Range", min(all_years), max(all_years), (min(all_years), max(all_years)))
 
+        # Filtering data for visualizations
         df_ana = master_df.copy()
         if sel_ipcs: 
             df_ana = df_ana[df_ana['IPC_Group'].isin(sel_ipcs)]
         df_ana = df_ana[(df_ana['Year'] >= sel_years[0]) & (df_ana['Year'] <= sel_years[1])]
 
-        # KPIs
-        k1, k2, k3, k4 = st.columns(4)
-        k1.metric("Total Patents", len(df_ana))
-        
-        countries = df_ana['Country Name (Priority)'].mode()
-        k2.metric("Primary Hub", countries[0] if not countries.empty else "N/A")
-        
-        ipcs = df_ana['IPC_Group'].mode()
-        k3.metric("Lead Technology", ipcs[0] if not ipcs.empty else "N/A")
-        
-        avg_year = round(df_ana['Year'].mean(), 1) if not df_ana.empty else 0
-        k4.metric("Avg Portfolio Age", int(avg_year))
+        if not df_ana.empty:
+            # KPI Metrics Row
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Selected Portfolio Size", len(df_ana))
+            k2.metric("Primary Jurisdiction", df_ana['Country Name (Priority)'].mode()[0] if not df_ana['Country Name (Priority)'].empty else "N/A")
+            k3.metric("Peak Year", int(df_ana['Year'].mode()[0]) if not df_ana['Year'].empty else "N/A")
 
-        # Visualizations
-        st.markdown("---")
-        col_left, col_right = st.columns(2)
-        
-        with col_left:
-            st.subheader("Geopolitical Patent Distribution")
-            geo_data = df_ana.groupby(['Year', 'Country Name (Priority)']).size().reset_index(name='Patents')
-            fig_area = px.area(geo_data, x='Year', y='Patents', color='Country Name (Priority)', 
-                               template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Prism)
-            st.plotly_chart(fig_area, use_container_width=True)
+            # PLOT 1: Time Series (Main Growth)
+            st.subheader("Filing Volume Over Time")
+            growth_df = df_ana.groupby('Year').size().reset_index(name='Count')
+            fig1 = px.line(growth_df, x='Year', y='Count', markers=True, template="plotly_dark")
+            fig1.update_traces(line_color=BRAND_ORANGE)
+            st.plotly_chart(fig1, use_container_width=True)
 
-        with col_right:
-            st.subheader("Technology Classification Hierarchy")
-            fig_tree = px.treemap(df_ana, path=['IPC_Group', 'Application Type (ID)'], 
-                                  color='Year', template="plotly_dark",
-                                  color_continuous_scale='Oranges')
-            st.plotly_chart(fig_tree, use_container_width=True)
+            # PLOT 2 & 3: Comparison Columns
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.subheader("Volume by IPC Class")
+                ipc_counts = df_ana['IPC_Group'].value_counts().reset_index()
+                fig2 = px.bar(ipc_counts, x='IPC_Group', y='count', color='IPC_Group', template="plotly_dark")
+                st.plotly_chart(fig2, use_container_width=True)
+            
+            with col_b:
+                st.subheader("Leading Jurisdictions")
+                geo_counts = df_ana['Country Name (Priority)'].value_counts().head(10).reset_index()
+                fig3 = px.pie(geo_counts, names='Country Name (Priority)', values='count', hole=0.4, template="plotly_dark")
+                fig3.update_traces(marker=dict(colors=px.colors.sequential.Oranges_r))
+                st.plotly_chart(fig3, use_container_width=True)
 
-        # Growth Chart
-        st.subheader("Annual Filing Velocity")
-        growth_data = df_ana.groupby('Year').size().reset_index(name='Volume')
-        fig_line = px.line(growth_data, x='Year', y='Volume', markers=True, 
-                           template="plotly_dark", line_shape="spline")
-        fig_line.update_traces(line_color=BRAND_ORANGE)
-        st.plotly_chart(fig_line, use_container_width=True)
+            # PLOT 4: Tech-Time Evolution (Heatmap)
+            st.subheader("Technology Emergence Heatmap")
+            heat_df = df_ana.groupby(['Year', 'IPC_Group']).size().reset_index(name='Count')
+            fig4 = px.density_heatmap(heat_df, x="Year", y="IPC_Group", z="Count", 
+                                     color_continuous_scale="Oranges", template="plotly_dark")
+            st.plotly_chart(fig4, use_container_width=True)
+        else:
+            st.warning("Adjust filters to load analysis data.")
 
 else:
-    st.error(f"Critical Error: System cannot find '{DATA_FILE}'. Please verify the file path.")
+    st.error(f"Data file '{DATA_FILE}' not found. Please ensure the file is in the same directory.")
