@@ -67,49 +67,78 @@ with st.sidebar:
 
 if master_df is not None:
     
-    # --- 5. SEARCH ENGINE (Global Search + Specific Filters) ---
+# --- 5. SEARCH ENGINE (Search + Dossier View) ---
     if nav == "Search Engine":
-        st.title("🔍 Patent Search & Analysis Engine")
+        st.title("🔍 Patent Search & Intelligence")
         
-        # A. GLOBAL KEYWORD SEARCH
-        global_q = st.text_input("Global Search", placeholder="Type keywords (e.g., 'Solar', 'IBM', 'Processing')...")
+        # Search Controls
+        global_q = st.text_input("Global Search", placeholder="Type keywords (e.g., 'Solar', 'IBM')...")
         
-        # B. STRUCTURED FILTERS
-        with st.expander("Advanced Filter Controls", expanded=True):
+        with st.expander("Advanced Filter Controls", expanded=False):
             c1, c2, c3 = st.columns(3)
-            with c1:
-                f_app = st.text_input("Application Number")
-                f_ipc = st.text_input("IPC Code (e.g. G06K)")
-            with c2:
-                f_country = st.text_input("Source Country")
-                f_type = st.text_input("App Type ID")
-            with c3:
-                f_year = st.text_input("Specific Year")
+            with c1: f_app = st.text_input("Application Number")
+            with c2: f_country = st.text_input("Source Country")
+            with c3: f_year = st.text_input("Specific Year")
         
-        # Logic: Narrowing down the data
+        # Filtering Logic
         df_search = master_df.copy()
-
         if global_q:
-            # Global filter: checks if any cell in the row contains the keyword
             mask = df_search.apply(lambda row: row.astype(str).str.contains(global_q, case=False).any(), axis=1)
             df_search = df_search[mask]
-        
         if f_app: df_search = df_search[df_search['Application Number'].astype(str).str.contains(f_app, case=False, na=False)]
-        if f_ipc: df_search = df_search[df_search['Classification'].astype(str).str.contains(f_ipc, case=False, na=False)]
         if f_country: df_search = df_search[df_search['Country Name (Priority)'].astype(str).str.contains(f_country, case=False, na=False)]
-        if f_type: df_search = df_search[df_search['Application Type (ID)'].astype(str).str.contains(f_type, na=False)]
         if f_year: df_search = df_search[df_search['Year'].astype(str).str.contains(f_year, na=False)]
 
-        # C. RESULTS & EXPORT
-        m1, m2 = st.columns([1, 4])
-        m1.metric("Results", len(df_search))
-        
-        # Export functionality
-        towrite = BytesIO()
-        df_search.to_csv(towrite, index=False)
-        st.download_button(label="📥 Download Search Results", data=towrite.getvalue(), file_name="search_export.csv", mime="text/csv")
+        # --- DOSSIER SELECTION ---
+        if not df_search.empty:
+            st.markdown("---")
+            # Selectbox to pick a specific patent to inspect
+            patent_options = df_search['Application Number'].tolist()
+            selected_app = st.selectbox("Select a Patent to view full Intelligence Dossier", patent_options)
+            
+            # Pull data for the specific dossier
+            dossier_data = df_search[df_search['Application Number'] == selected_app].iloc[0]
 
-        st.dataframe(df_search, use_container_width=True, hide_index=True)
+            # --- DOSSIER LAYOUT ---
+            with st.container():
+                st.markdown(f"### 📄 DOSSIER: {selected_app}")
+                
+                # Column Layout for "Google Patent" style look
+                col_left, col_right = st.columns([2, 1])
+
+                with col_left:
+                    st.markdown(f"#### **Classification:** {dossier_data.get('Classification', 'N/A')}")
+                    st.info(f"**Description Summary:** This application was filed in the jurisdiction of **{dossier_data.get('Country Name (Priority)', 'Unknown')}**.")
+                    
+                    # Detailed Metadata Table
+                    details = {
+                        "Field": ["Application Date", "IPC Group", "Applicant Type", "Legal Status"],
+                        "Value": [
+                            dossier_data.get('Application Date', 'N/A'),
+                            dossier_data.get('IPC_Group', 'N/A'),
+                            dossier_data.get('Application Type (ID)', 'N/A'),
+                            "Active / Pending" # You can map this to a status column if available
+                        ]
+                    }
+                    st.table(pd.DataFrame(details))
+
+                with col_right:
+                    # Sidebar info card
+                    st.markdown(f"""
+                    <div style="border: 1px solid {BRAND_ORANGE}; padding: 20px; border-radius: 10px; background-color: #161b22;">
+                        <p style="color:{BRAND_ORANGE}; margin-bottom: 5px;">FILING YEAR</p>
+                        <h2 style="margin-top: 0px;">{int(dossier_data.get('Year', 0))}</h2>
+                        <hr>
+                        <p style="color:{BRAND_ORANGE}; margin-bottom: 5px;">PRIORITY COUNTRY</p>
+                        <h3 style="margin-top: 0px;">{dossier_data.get('Country Name (Priority)', 'N/A')}</h3>
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            st.markdown("#### Full Search Results Data")
+            st.dataframe(df_search, use_container_width=True, hide_index=True)
+        else:
+            st.warning("No records found matching your criteria.")
 
     # --- 6. STRATEGIC ANALYSIS (Visualization) ---
     else:
