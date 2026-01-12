@@ -1,51 +1,44 @@
 import streamlit as st
 import pandas as pd
-import hmac
+import plotly.express as px
 import os
 import io
-import plotly.express as px
 from datetime import datetime
 
-# --- 1. PAGE CONFIG & ARCHISTRATEGOS BRANDING ---
-st.set_page_config(page_title="Archistrategos Intelligence", layout="wide", page_icon="⚖️")
+# --- 1. CONFIGURATION & BRANDING ---
+# Set the brand color to the Archistrategos Orange
+BRAND_ORANGE = "#FF8C00"
 
-# Professional Executive Theme
-st.markdown("""
+st.set_page_config(page_title="Archistrategos Intelligence Portal", layout="wide", page_icon="⚖️")
+
+st.markdown(f"""
     <style>
-    .stApp { background-color: #0E1117; color: #FFFFFF; font-family: 'Inter', sans-serif; }
-    [data-testid="stSidebar"] { background-color: #000000 !important; border-right: 2px solid #FF8C00; }
-    
-    /* Branded Orange Headers and Metric Badges */
-    h1, h2, h3 { color: #FF8C00 !important; font-weight: 800; }
-    .metric-badge {
-        background: linear-gradient(135deg, #161b22 0%, #0E1117 100%);
-        color: #FF8C00 !important;
+    .stApp {{ background-color: #0E1117; color: #FFFFFF; font-family: 'Inter', sans-serif; }}
+    [data-testid="stSidebar"] {{ background-color: #000000 !important; border-right: 2px solid {BRAND_ORANGE}; }}
+    h1, h2, h3 {{ color: {BRAND_ORANGE} !important; font-weight: 800; }}
+    .metric-badge {{
+        background: #161b22;
+        color: {BRAND_ORANGE} !important;
         padding: 15px;
         border-radius: 8px;
-        border: 1px solid #FF8C00;
+        border: 1px solid {BRAND_ORANGE};
         text-align: center;
         margin-bottom: 20px;
-    }
-
-    /* Buttons */
-    div.stButton > button {
-        background-color: #FF8C00 !important;
+    }}
+    div.stButton > button {{
+        background-color: {BRAND_ORANGE} !important;
         color: #000000 !important;
         font-weight: 700 !important;
-        border: none !important;
         width: 100%;
-    }
-
-    /* Tabs Styling */
-    .stTabs [aria-selected="true"] {
-        background-color: #FF8C00 !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background-color: {BRAND_ORANGE} !important;
         color: black !important;
-        font-weight: bold;
-    }
+    }}
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. SECURITY GATEWAY ---
+# --- 2. SECURITY GATEWAY (Password Included) ---
 def check_password():
     if st.session_state.get("password_correct", False):
         return True
@@ -58,62 +51,60 @@ def check_password():
         st.markdown("<h2 style='text-align: center;'>SECURITY GATEWAY</h2>", unsafe_allow_html=True)
         
         with st.form("login_gateway"):
+            # PASSWORD ADDED HERE
             pwd = st.text_input("Enter Passcode", type="password")
             if st.form_submit_button("AUTHENTICATE SYSTEM"):
-                # Matches your requirement for configurable security
                 if pwd == "Archistrategos2024": 
                     st.session_state["password_correct"] = True
                     st.rerun()
                 else:
-                    st.error("Invalid Credentials.")
+                    st.error("Invalid Credentials. Access Denied.")
     return False
 
 if not check_password():
     st.stop()
 
-# --- 3. DATA INGESTION ENGINE ---
+# --- 3. DATA ENGINE ---
 @st.cache_data
 def load_and_prep_data(file):
     df = pd.read_csv(file)
-    # Ensure column names match your requested list exactly
     df.columns = [c.strip() for c in df.columns]
     
-    # Prep Dates for Analysis
+    # Date processing for Growth Analysis
     date_cols = ['Application Date', 'Priority Date', 'Earliest Priority Date']
     for col in date_cols:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors='coerce')
     
-    # Extract Year for IPC Growth tracking
     if 'Application Date' in df.columns:
         df['Filing Year'] = df['Application Date'].dt.year
-    
+        
     return df
 
-# --- 4. NAVIGATION & SIDEBAR ---
+# --- 4. NAVIGATION ---
 with st.sidebar:
     if os.path.exists("logo.jpeg"):
         st.image("logo.jpeg", use_container_width=True)
     st.markdown("---")
-    nav = st.radio("COMMAND CENTER", ["Search Engine", "Analysis Engine"])
+    nav = st.radio("COMMAND NAVIGATION", ["Search Engine", "Analysis Engine"])
     
-    uploaded_file = st.file_uploader("Upload Master Patent CSV", type="csv")
+    # Allows user to upload their specific CSV
+    uploaded_file = st.file_uploader("Upload Patent Dataset", type="csv")
     
-    if st.button("🔄 Reset System"):
+    if st.button("🔄 Clear Filters"):
         for key in st.session_state.keys():
             if key.startswith('search_'): st.session_state[key] = ""
         st.rerun()
 
-# --- 5. MAIN LOGIC ---
+# --- 5. SYSTEM LOGIC ---
 if uploaded_file:
     master_df = load_and_prep_data(uploaded_file)
     
-    # --- 5.1 SEARCH ENGINE MODULE ---
     if nav == "Search Engine":
         st.title("🔍 Patent Query Engine")
         
-        # 10 Requested Search Filters
-        st.markdown("### Active Filters")
+        # 10 FILTERS REQUESTED BY USER
+        st.markdown("### Search Parameters")
         c1, c2, c3 = st.columns(3)
         with c1:
             q_app_num = st.text_input("Application Number", key="search_1")
@@ -121,7 +112,7 @@ if uploaded_file:
             q_abstract = st.text_input("Abstract", key="search_3")
             q_date = st.text_input("Application Date (YYYY-MM-DD)", key="search_4")
         with c2:
-            q_class = st.text_input("Classification (IPC)", key="search_5")
+            q_class = st.text_input("Classification", key="search_5")
             q_country = st.text_input("Country Name (Priority)", key="search_6")
             q_prio_num = st.text_input("Priority Number", key="search_7")
         with c3:
@@ -129,7 +120,7 @@ if uploaded_file:
             q_early_date = st.text_input("Earliest Priority Date", key="search_9")
             q_type = st.text_input("Application Type (ID)", key="search_10")
 
-        # Filtering Logic
+        # Filtering Execution
         f = master_df.copy()
         if q_app_num: f = f[f['Application Number'].astype(str).str.contains(q_app_num, case=False, na=False)]
         if q_title: f = f[f['Title'].astype(str).str.contains(q_title, case=False, na=False)]
@@ -142,51 +133,38 @@ if uploaded_file:
         if q_early_date: f = f[f['Earliest Priority Date'].astype(str).str.contains(q_early_date, na=False)]
         if q_type: f = f[f['Application Type (ID)'].astype(str).str.contains(q_type, na=False)]
 
-        st.session_state['filtered_data'] = f
+        st.session_state['filtered_df'] = f
 
-        st.markdown(f'<div class="metric-badge">IDENTIFIED: {len(f)} RECORDS</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-badge">RESULTS IDENTIFIED: {len(f)}</div>', unsafe_allow_html=True)
         st.dataframe(f, use_container_width=True, hide_index=True)
 
-    # --- 5.2 ANALYSIS ENGINE MODULE ---
     elif nav == "Analysis Engine":
-        st.title("📈 Intelligence Analysis Engine")
+        st.title("📈 Strategic Analysis Engine")
+        df_ana = st.session_state.get('filtered_df', master_df)
         
-        # Use filtered data if available, else use master
-        df_ana = st.session_state.get('filtered_data', master_df)
-        
-        if df_ana.empty:
-            st.warning("No data available for analysis. Adjust your search filters.")
-        else:
-            # --- IPC GROWTH OVER TIME ---
-            st.subheader("Temporal IPC Growth")
-            if 'Classification' in df_ana.columns and 'Filing Year' in df_ana.columns:
-                # Cleaning IPC for better graphing (getting top level code)
-                df_growth = df_ana.copy()
-                df_growth['IPC_Group'] = df_growth['Classification'].str.split().str[0]
-                
-                growth_counts = df_growth.groupby(['Filing Year', 'IPC_Group']).size().reset_index(name='Volume')
-                
-                fig_growth = px.line(growth_counts, x='Filing Year', y='Volume', color='IPC_Group',
-                                    title="IPC Classification Trends (Growth over Time)",
-                                    markers=True, template="plotly_dark", color_discrete_sequence=px.colors.qualitative.Bold)
-                st.plotly_chart(fig_growth, use_container_width=True)
+        # --- IPC GROWTH CHART ---
+        st.subheader("International Patent Classification (IPC) Growth")
+        if 'Classification' in df_ana.columns and 'Filing Year' in df_ana.columns:
+            # Grouping IPC to main categories
+            df_ana['IPC_Main'] = df_ana['Classification'].str.split().str[0]
+            growth = df_ana.groupby(['Filing Year', 'IPC_Main']).size().reset_index(name='Count')
+            
+            fig = px.line(growth, x='Filing Year', y='Count', color='IPC_Main', 
+                         markers=True, template="plotly_dark", 
+                         title="IPC Technology Growth Over Time")
+            st.plotly_chart(fig, use_container_width=True)
 
-            # --- DYNAMIC COMPONENT COMPARISON ---
-            st.markdown("---")
-            st.subheader("Cross-Component Comparison")
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                comp_field = st.selectbox("Analyze Distribution of:", 
-                                         ['Classification', 'Country Name (Priority)', 'Application Type (ID)'])
-                dist_data = df_ana[comp_field].value_counts().reset_index().head(10)
-                fig_dist = px.bar(dist_data, x=comp_field, y='count', color=comp_field,
-                                 template="plotly_dark", title=f"Top 10: {comp_field}")
-                st.plotly_chart(fig_dist, use_container_width=True)
-            
-            with col_b:
-                st.markdown("#### Summary Intelligence")
-                st.write(df_ana.describe(include='all').astype(str))
+        # --- ADDITIONAL COMPARISONS ---
+        st.markdown("---")
+        col_left, col_right = st.columns(2)
+        with col_left:
+            st.markdown("#### Top Countries")
+            geo = df_ana['Country Name (Priority)'].value_counts().head(10)
+            st.bar_chart(geo)
+        with col_right:
+            st.markdown("#### Application Types")
+            types = df_ana['Application Type (ID)'].value_counts()
+            st.pie_chart(types)
 
 else:
-    st.info("👋 Welcome to the Archistrategos Patent Portal. Please upload your CSV file in the sidebar to begin.")
+    st.info("System Initialized. Please upload 'Data Structure - Patents in UAE (Archistrategos) - Type 5.csv' to begin.")
