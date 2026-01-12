@@ -136,7 +136,7 @@ if master_df is not None:
         else:
             st.info("No matching patents found.")
 
-    # --- 6. STRATEGIC ANALYSIS (Multiple Dynamic Plots) ---
+ # --- 6. STRATEGIC ANALYSIS (Optimized Layout) ---
     else:
         st.title("📈 Strategic Analysis Dashboard")
         
@@ -148,7 +148,6 @@ if master_df is not None:
             all_years = sorted(master_df['Year'].dropna().unique().astype(int))
             sel_years = st.slider("Timeline Range", min(all_years), max(all_years), (min(all_years), max(all_years)))
 
-        # Filtering data for visualizations
         df_ana = master_df.copy()
         if sel_ipcs: 
             df_ana = df_ana[df_ana['IPC_Group'].isin(sel_ipcs)]
@@ -157,37 +156,46 @@ if master_df is not None:
         if not df_ana.empty:
             # KPI Metrics Row
             k1, k2, k3 = st.columns(3)
-            k1.metric("Selected Portfolio Size", len(df_ana))
+            k1.metric("Selected Portfolio", len(df_ana))
             k2.metric("Primary Jurisdiction", df_ana['Country Name (Priority)'].mode()[0] if not df_ana['Country Name (Priority)'].empty else "N/A")
             k3.metric("Peak Year", int(df_ana['Year'].mode()[0]) if not df_ana['Year'].empty else "N/A")
 
-            # PLOT 1: Time Series (Main Growth)
+            # PLOT 1: Time Series
             st.subheader("Filing Volume Over Time")
             growth_df = df_ana.groupby('Year').size().reset_index(name='Count')
-            fig1 = px.line(growth_df, x='Year', y='Count', markers=True, template="plotly_dark")
-            fig1.update_traces(line_color=BRAND_ORANGE)
+            fig1 = px.area(growth_df, x='Year', y='Count', template="plotly_dark")
+            fig1.update_traces(line_color=BRAND_ORANGE, fillcolor="rgba(255, 140, 0, 0.2)")
             st.plotly_chart(fig1, use_container_width=True)
 
-            # PLOT 2 & 3: Comparison Columns
+            # PLOT 2 & 3: Optimized Columns
             col_a, col_b = st.columns(2)
+            
             with col_a:
-                st.subheader("Volume by IPC Class")
-                ipc_counts = df_ana['IPC_Group'].value_counts().reset_index()
-                fig2 = px.bar(ipc_counts, x='IPC_Group', y='count', color='IPC_Group', template="plotly_dark")
+                st.subheader("Top 10 Tech Classes")
+                # FIX: Only show Top 10 to prevent X-axis clutter seen in your screenshot
+                ipc_counts = df_ana['IPC_Group'].value_counts().head(10).reset_index()
+                fig2 = px.bar(ipc_counts, x='IPC_Group', y='count', template="plotly_dark", text_auto=True)
+                fig2.update_traces(marker_color=BRAND_ORANGE)
+                fig2.update_layout(xaxis_tickangle=-45) # Angle labels for readability
                 st.plotly_chart(fig2, use_container_width=True)
             
             with col_b:
                 st.subheader("Leading Jurisdictions")
-                geo_counts = df_ana['Country Name (Priority)'].value_counts().head(10).reset_index()
-                fig3 = px.pie(geo_counts, names='Country Name (Priority)', values='count', hole=0.4, template="plotly_dark")
-                fig3.update_traces(marker=dict(colors=px.colors.sequential.Oranges_r))
+                geo_counts = df_ana['Country Name (Priority)'].value_counts().head(5).reset_index()
+                fig3 = px.pie(geo_counts, names='Country Name (Priority)', values='count', hole=0.5, template="plotly_dark")
+                fig3.update_traces(marker=dict(colors=px.colors.sequential.Oranges_r), textinfo='percent+label')
                 st.plotly_chart(fig3, use_container_width=True)
 
-            # PLOT 4: Tech-Time Evolution (Heatmap)
+            # PLOT 4: Tech Heatmap (Larger and Cleaner)
             st.subheader("Technology Emergence Heatmap")
-            heat_df = df_ana.groupby(['Year', 'IPC_Group']).size().reset_index(name='Count')
+            # Only show Top 15 IPCs in heatmap to prevent the "smear" effect
+            top_ipcs = df_ana['IPC_Group'].value_counts().head(15).index
+            heat_df = df_ana[df_ana['IPC_Group'].isin(top_ipcs)]
+            heat_df = heat_df.groupby(['Year', 'IPC_Group']).size().reset_index(name='Count')
+            
             fig4 = px.density_heatmap(heat_df, x="Year", y="IPC_Group", z="Count", 
-                                     color_continuous_scale="Oranges", template="plotly_dark")
+                                     color_continuous_scale="Oranges", template="plotly_dark",
+                                     height=600) # Increased height for better label spacing
             st.plotly_chart(fig4, use_container_width=True)
         else:
             st.warning("Adjust filters to load analysis data.")
